@@ -38,3 +38,17 @@ After you have installed conda, close any open terminals you might have. Then op
     
 ```
 
+### Potential Environmental Error for Step 3: 
+
+I was getting the following error: 
+
+```
+ImportError: cannot import name 'constants' from 'zmq.backend.cython' (C:\Users\David\AppData\Roaming\Python\Python37\site-packages\zmq\backend\cython\__init__.py)
+```
+
+The steps listed here helped: https://github.com/jupyter/notebook/issues/3435#issuecomment-601920531
+
+```python
+pip uninstall pyzmq
+pip install pyzmq
+```
