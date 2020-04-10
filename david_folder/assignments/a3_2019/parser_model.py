@@ -40,7 +40,7 @@ class ParserModel(nn.Module):
         @param n_classes (int): number of output classes
         @param dropout_prob (float): dropout probability
         """
-        super(ParserModel, self).__init__()
+        super(ParserModel, self).__init__() # we can access methods & such from ParserModel
         self.n_features = n_features
         self.n_classes = n_classes
         self.dropout_prob = dropout_prob
@@ -53,10 +53,22 @@ class ParserModel(nn.Module):
         ### TODO:
         ###     1) Construct `self.embed_to_hidden` linear layer, initializing the weight matrix
         ###         with the `nn.init.xavier_uniform_` function with `gain = 1` (default)
+        
+        self.embed_to_hidden = nn.Linear(self.n_features * self.embed_size, self.hidden_size) # what tensor to pass? (dim_in, hidden_size)
+        
+        # TODO: Refresh memory on this - should I be doing embed x hidden? or is it embed x feat x hidden?
+        # Will automatically build out the proper weight & bias terms, but we want weight
+        nn.init.xavier_uniform_(self.embed_to_hidden.weight, gain = 1) # initialize
+        
         ###     2) Construct `self.dropout` layer.
+        self.dropout = nn.Dropout(self.dropout_prob) # we refer to our input value
+        
         ###     3) Construct `self.hidden_to_logits` linear layer, initializing the weight matrix
         ###         with the `nn.init.xavier_uniform_` function with `gain = 1` (default)
         ###
+        self.hidden_to_logits = nn.Linear(self.hidden_size, self.n_classes) # what tensor to pass? (hidden, num_classes)
+        nn.init.xavier_uniform_(self.hidden_to_logits.weight, gain = 1) # initialize weight only
+        
         ### Note: Here, we use Xavier Uniform Initialization for our Weight initialization.
         ###         It has been shown empirically, that this provides better initial weights
         ###         for training networks than random uniform initialization.
@@ -94,12 +106,45 @@ class ParserModel(nn.Module):
         ### YOUR CODE HERE (~1-3 Lines)
         ### TODO:
         ###     1) Use `self.pretrained_embeddings` to lookup the embeddings for the input tokens in `t`.
+        
+        # we pass in a tensor of features stored as integers 
+        # the embeddings is of size (vocab, vector_size) where vector_size just represents our representational features
+        # pretrained_embeddings class can handle recimport torch
+        
+        """
+        import torch
+        from torch import nn
+        embedding = nn.Embedding(1000,128)
+        test_case = embedding(torch.LongTensor([3,4]))
+        assert embedding(torch.LongTensor([3])).sum().item() == test_case[0].sum().item() # we got the proper val
+        
+        # this would return a tensor with embeddings for the 3rd & 4th word from vocab of 1000 in positions 0 & 1
+        # i then just sum up embeddings to confirm
+        # info: https://stackoverflow.com/questions/50747947/embedding-in-pytorch
+        """
+        x = self.pretrained_embeddings(t)
+        
+        
         ###     2) After you apply the embedding lookup, you will have a tensor shape (batch_size, n_features, embedding_size).
         ###         Use the tensor `view` method to reshape the embeddings tensor to (batch_size, n_features * embedding_size)
         ###
         ### Note: In order to get batch_size, you may need use the tensor .size() function:
         ###         https://pytorch.org/docs/stable/tensors.html#torch.Tensor.size
         ###
+        
+        # helpful: https://stackoverflow.com/questions/42479902/how-does-the-view-method-work-in-pytorch
+        # 3D tensor right now: (b, feat, embedding dim) -> (b, f * e)
+        # use .size() ----> test_case.size()[0], test_case.size()[1] * test_case.size()[2]
+        x = x.view(x.size()[0], x.size()[1] * x.size()[2])
+        
+        
+        # ensure that our X has same number of rows as the input tensor 
+        assert x.size()[0] == t.size()[0]
+        
+        # ensure our x has the same num of cols as feat * embedding dim
+        assert x.size()[1] == t.size()[1] * self.pretrained_embeddings.weight.size()[1]
+        
+        
         ###  Please see the following docs for support:
         ###     Embedding Layer: https://pytorch.org/docs/stable/nn.html#torch.nn.Embedding
         ###     View: https://pytorch.org/docs/stable/tensors.html#torch.Tensor.view
@@ -131,17 +176,44 @@ class ParserModel(nn.Module):
         ###  YOUR CODE HERE (~3-5 lines)
         ### TODO:
         ###     1) Apply `self.embedding_lookup` to `t` to get the embeddings
+        
+        # create output of our embedding matrix called "embeddings"
+        self.embeddings = self.embedding_lookup(t)
+        
         ###     2) Apply `embed_to_hidden` linear layer to the embeddings
+        
+        # we are now passing our (batch, 1080 feat) through weights to build our 'z' (output prior to passing into activation
+        # this is just W^T * X + b 
+        # adding a line to convert embeddings to float - my testing was failing probably due to my input values being integers
+        self.z =  self.embed_to_hidden(self.embeddings.float())
+        
+        
         ###     3) Apply relu non-linearity to the output of step 2 to get the hidden units.
+        # looks like this is in the functional portion of torch.nn from documentaiton
+        self.a = F.relu(self.z)
+        
         ###     4) Apply dropout layer to the output of step 3.
+        # we now have a dropout layer to pass embeddings through
+        # rrather, pass a through
+        # need to recall that our weights will be scaled according to our likelihood of being dropped out 
+        # this handles proper signal output
+        self.drop_a = self.dropout(self.a)
+        
         ###     5) Apply `hidden_to_logits` layer to the output of step 4 to get the logits.
         ###
+        
+        self.z2 = self.hidden_to_logits(self.drop_a) # this will eventually be passed to a softmax layer
+        
         ### Note: We do not apply the softmax to the logits here, because
         ### the loss function (torch.nn.CrossEntropyLoss) applies it more efficiently.
         ###
         ### Please see the following docs for support:
         ###     ReLU: https://pytorch.org/docs/stable/nn.html?highlight=relu#torch.nn.functional.relu
 
+
+        ### END YOUR CODE
+        # unecessary, but ensuring i have logits output
+        logits = self.z2
 
         ### END YOUR CODE
         return logits

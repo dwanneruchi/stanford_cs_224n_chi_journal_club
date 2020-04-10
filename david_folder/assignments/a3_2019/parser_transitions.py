@@ -22,8 +22,12 @@ class PartialParse(object):
         ### Your code should initialize the following fields:
         ###     self.stack: The current stack represented as a list with the top of the stack as the
         ###                 last element of the list.
+        
+        self.stack = ["ROOT"] # we need to start with root
         ###     self.buffer: The current buffer represented as a list with the first item on the
         ###                  buffer as the first item of the list
+        
+        self.buffer = sentence
         ###     self.dependencies: The list of dependencies produced so far. Represented as a list of
         ###             tuples where each tuple is of the form (head, dependent).
         ###             Order for this list doesn't matter.
@@ -31,7 +35,8 @@ class PartialParse(object):
         ### Note: The root token should be represented with the string "ROOT"
         ###
 
-
+        self.dependencies = []
+        
         ### END YOUR CODE
 
 
@@ -49,7 +54,26 @@ class PartialParse(object):
         ###         1. Shift
         ###         2. Left Arc
         ###         3. Right Arc
-
+        
+        if transition == 'S':
+            self.stack.append(self.buffer.pop(0))
+            
+        elif transition == 'LA':
+            
+            # find the second item & mark it as a dependency of the first 
+            # I think this would be [-2] vs [-1]
+            second_itm = self.stack.pop(-2) #pop out the 2nd back index; removed from list
+            first_itm = self.stack[-1]
+            self.dependencies.append((first_itm, second_itm)) # update
+            
+        elif transition == 'RA':
+            # find the first item & mark it as a dependency of the second (opposite of previous)
+            second_itm = self.stack[-2]
+            first_itm = self.stack.pop(-1) #pop out the 1st back index; removed from list
+            self.dependencies.append((second_itm, first_itm)) # update the dependencies
+            
+        else:
+            print("There is an error")
 
         ### END YOUR CODE
 
@@ -65,7 +89,6 @@ class PartialParse(object):
         for transition in transitions:
             self.parse_step(transition)
         return self.dependencies
-
 
 def minibatch_parse(sentences, model, batch_size):
     """Parses a list of sentences in minibatches using a model.
@@ -102,9 +125,41 @@ def minibatch_parse(sentences, model, batch_size):
     ###             is being accessed by `partial_parses` and may cause your code to crash.
 
 
-    ### END YOUR CODE
-
-    return dependencies
+    # Generating a list of Partial_Parses instances
+    partial_parses = [PartialParse(x) for x in sentences]
+    
+    # generate a shallow copy - this means we will be modifying the original partial parses
+    # the reason is so we can get the final dependencies attribute 
+    unfinished_parses = partial_parses[:]
+    
+    # iterate through until each batch chunk
+    while len(unfinished_parses) > 0:
+        
+        # take next set of PartialParse objects
+        minibatch = unfinished_parses[:batch_size]
+        
+        # use the model to predict the next transition for each partial parse in minibatch
+        # model.predict() method expects as an argument a list of instance of PartialParse
+        # .predict() will just do a list comprehension where we check buffer size
+        transitions = model.predict(minibatch)
+    
+        # transition[i] goes with minibatch[i] - so we can zip them up
+        zipped_list = zip(transitions, minibatch)
+            
+        # perform a parse step, passing in the predictions transitions to the proper PartialParse object
+        for pred_tran, sent in zipped_list:
+            sent.parse_step(pred_tran)
+            
+            # Remove the completed (empty buffer and stack of size 1) parses from unfinished parses
+            if (len(sent.buffer) == 0) & (len(sent.stack) == 1):
+                
+                # remove item by value from unfinished parses - this means we wil keep iterating through incomplete parses?
+                unfinished_parses.remove(sent)
+  
+    
+    # gather all dependencies - we can reference the objects from partial_parses, which have been modified at this point
+    
+    return [x.dependencies for x in partial_parses]
 
 
 def test_step(name, transition, stack, buf, deps,
