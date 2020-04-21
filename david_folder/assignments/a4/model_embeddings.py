@@ -18,7 +18,6 @@ class ModelEmbeddings(nn.Module):
     def __init__(self, embed_size, vocab):
         """
         Init the Embedding layers.
-
         @param embed_size (int): Embedding size (dimensionality)
         @param vocab (Vocab): Vocabulary object containing src and tgt languages
                               See vocab.py for documentation.
@@ -59,5 +58,3 @@ class ModelEmbeddings(nn.Module):
         self.target = nn.Embedding(num_embeddings= len(vocab.tgt), embedding_dim = embed_size, padding_idx = tgt_pad_token_idx)
 
         ### END YOUR CODE
-
-
