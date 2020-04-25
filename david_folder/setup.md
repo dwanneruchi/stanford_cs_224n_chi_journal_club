@@ -1,0 +1,1 @@
+source nlp/bin/activate
